@@ -1,55 +1,38 @@
-# Pracownia alchemika (MageWorkshop)
+# Pracownia alchemika
 
-VR-игра для HTC Vive Pro на Unity 6 + XR Interaction Toolkit 3.4 + OpenXR (SteamVR).
+Gra VR na gogle HTC Vive (Unity 6, XR Interaction Toolkit, OpenXR). Gracz prowadzi pracownię alchemiczną w wozie na rynku i warzy mikstury.
 
-## Первый запуск
+## Uruchomienie
 
-1. Открыть проект в Unity 6000.0.85f1.
-2. Открыть сцену `Assets/MageWorkshop/Scenes/Workshop.unity` (она единственная в Build Settings).
-3. Нажать Play.
+1. Otwórz projekt w Unity 6000.0.85f1.
+2. Otwórz scenę `Assets/MageWorkshop/Scenes/Workshop.unity`.
+3. Naciśnij Play.
 
-OpenXR для Windows уже настроен: включены профили контроллеров HTC Vive и Meta Quest, режим Single Pass Instanced
-(**Edit → Project Settings → XR Plug-in Management → OpenXR**).
+## Sterowanie
 
-## Шлем или симулятор — переключать ничего не нужно
+| Akcja | HTC Vive | Symulator |
+| --- | --- | --- |
+| Chwycenie / puszczenie przedmiotu | grip | G |
+| Oddalenie / przybliżenie trzymanego przedmiotu | touchpad w górę / w dół | I / K |
 
-`Simulator Bootstrap` в сцене через ~1,5 с после старта проверяет, есть ли шлем:
+## Struktura
 
-- **Есть HTC Vive (лаборатория):** запустите SteamVR (он должен быть OpenXR runtime по умолчанию), затем Play — картинка идёт в шлем, контроллеры Vive управляют руками.
-- **Шлема нет (дома):** автоматически запускается **XR Interaction Simulator** (подсказки по клавишам — на экране в окне Game).
+Wszystkie pliki projektu są w `Assets/MageWorkshop`: `Scenes` — scena, `Scripts` — kod, `Data` — składniki i receptura, `Materials` i `Meshes` — materiały i modele.
 
-## Управление
+| Plik | Opis |
+| --- | --- |
+| `Scripts/Brewing/Cauldron.cs` | Kocioł: rejestrowanie składników, płynów i obrotów chochli, poziom i kolor cieczy, ocena receptury, wybuch |
+| `Scripts/Brewing/Recipe.cs` | Receptura (ScriptableObject) i jej sprawdzanie |
+| `Scripts/Brewing/BrewAction.cs` | Pojedyncza czynność zarejestrowana przez kocioł |
+| `Scripts/Brewing/IngredientDefinition.cs` | Rodzaj składnika (stały lub płynny) |
+| `Scripts/Interaction/Ingredient.cs` | Składnik, który można wrzucić do kotła |
+| `Scripts/Interaction/LiquidSource.cs` | Nalewanie płynu przez przechylenie butelki |
+| `Scripts/Interaction/Ladle.cs` | Chochla do mieszania |
+| `Scripts/Interaction/ReturnHome.cs` | Powrót upuszczonych przedmiotów na miejsce |
+| `Scripts/Interaction/GrabDistanceControl.cs` | Przybliżanie i oddalanie trzymanego przedmiotu |
+| `Scripts/Interaction/PlayerCollision.cs` | Kolizje gracza ze ścianami i meblami |
+| `Scripts/Interaction/Haptics.cs` | Wibracje kontrolerów |
+| `Scripts/Core/SimulatorBootstrap.cs` | Włączanie symulatora, gdy nie ma gogli |
+| `Scripts/Core/LightFlicker.cs` | Migotanie ognia, latarni i świec |
 
-| Действие | HTC Vive | Симулятор |
-|---|---|---|
-| Взять / отпустить предмет | grip (боковая кнопка) | **G** |
-| Отдалить / приблизить взятый предмет | провести по тачпаду вверх / вниз | **I** / **K** |
-| Выбрать руку или голову | — | **Tab** |
-| Подсказки симулятора | — | **Y** |
-
-## Тестовый рецепт — Eliksir zdrowia
-
-1. Бросить в котёл **2× Utłuczony korzeń mandragory** (корешки с листьями на нижней полке стеллажа справа).
-2. Налить **Woda źródlana** (голубая бутылка на столе справа) до золотой метки (300 ± 40 мл) — наклонить бутылку над котлом.
-3. Взять черпак (висит слева) и сделать **3 оборота по часовой стрелке** (если смотреть сверху).
-
-Ход варки и ошибки показаны на табличке справа под маркизой. Ошибка (не тот ингредиент, порядок, слишком много / мало, не то направление) — взрыв котла; через 3 с котёл очищается.
-
-## Структура
-
-Всё своё лежит в `Assets/MageWorkshop`: `Scenes` — сцена, `Scripts` — код, `Data` — ингредиенты и рецепт, `Materials` и `Meshes` — материалы и модели.
-
-| Файл | Что делает |
-|---|---|
-| `Scripts/Brewing/Cauldron.cs` | Котёл: учёт ингредиентов/жидкостей/оборотов (F7, F8), уровень и цвет жидкости, проверка рецепта, взрыв |
-| `Scripts/Brewing/Recipe.cs` | Рецепт (ScriptableObject) и его проверка |
-| `Scripts/Interaction/LiquidSource.cs` | Наливание при наклоне бутылки (F6) |
-| `Scripts/Interaction/Ladle.cs` | Черпак (кончик, по которому считаются обороты) |
-| `Scripts/Interaction/ReturnHome.cs` | Возврат упавших / недоступных предметов на место (F3) |
-| `Scripts/Interaction/Haptics.cs` | Вибрация контроллеров (F21) |
-| `Scripts/Interaction/GrabDistanceControl.cs` | Приближение / отдаление взятого предмета |
-| `Scripts/Interaction/PlayerCollision.cs` | Тело игрока: не даёт пройти сквозь стены, прилавок, стол и котёл |
-| `Scripts/Core/SimulatorBootstrap.cs` | Симулятор, только когда нет шлема |
-| `Scripts/Core/LightFlicker.cs` | Мерцание огня, фонарей и свечей |
-
-Новые ингредиенты и рецепты: ПКМ в Project → **Create → Mage Workshop → Ingredient / Recipe**.
+Nowe składniki i receptury: prawy przycisk w oknie Project -\> **Create -\> Mage Workshop -\> Ingredient / Recipe**.
