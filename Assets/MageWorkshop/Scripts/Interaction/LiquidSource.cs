@@ -23,28 +23,21 @@ namespace MageWorkshop
         void Awake()
         {
             m_Grab = GetComponent<XRGrabInteractable>();
-            if (stream != null)
-            {
-                stream.positionCount = 2;
-                stream.enabled = false;
-                if (liquid != null)
-                    stream.startColor = stream.endColor = liquid.color;
-            }
+            stream.positionCount = 2;
+            stream.startColor = stream.endColor = liquid.color;
         }
 
         void Update()
         {
             float tilt = Vector3.Angle(transform.up, Vector3.up);
-            bool pouring = IsHeldByHand() && tilt > pourAngle;
+            bool heldByHand = m_Grab.isSelected && !(m_Grab.firstInteractorSelecting is XRSocketInteractor);
+            bool pouring = heldByHand && tilt > pourAngle;
 
-            if (stream != null)
-                stream.enabled = pouring;
-
+            stream.enabled = pouring;
             if (!pouring)
                 return;
 
-            float flow = flowRate * Mathf.Lerp(0.3f, 1f, Mathf.InverseLerp(pourAngle, 160f, tilt));
-            var origin = spout != null ? spout.position : transform.position;
+            var origin = spout.position;
             var end = origin + Vector3.down * maxStreamLength;
 
             if (Physics.Raycast(origin, Vector3.down, out var hit, maxStreamLength, Physics.DefaultRaycastLayers, QueryTriggerInteraction.Collide))
@@ -52,25 +45,20 @@ namespace MageWorkshop
                 end = hit.point;
                 var cauldron = hit.collider.GetComponentInParent<Cauldron>();
                 if (cauldron != null)
+                {
+                    float flow = flowRate * Mathf.Lerp(0.3f, 1f, Mathf.InverseLerp(pourAngle, 160f, tilt));
                     cauldron.AddLiquid(liquid, flow * Time.deltaTime);
+                }
             }
 
-            if (stream != null)
-            {
-                stream.SetPosition(0, origin);
-                stream.SetPosition(1, end);
-            }
+            stream.SetPosition(0, origin);
+            stream.SetPosition(1, end);
 
             if (Time.time >= m_NextHapticTime)
             {
                 Haptics.Pulse(m_Grab, 0.15f, 0.1f);
                 m_NextHapticTime = Time.time + 0.1f;
             }
-        }
-
-        bool IsHeldByHand()
-        {
-            return m_Grab.isSelected && !(m_Grab.firstInteractorSelecting is XRSocketInteractor);
         }
     }
 }

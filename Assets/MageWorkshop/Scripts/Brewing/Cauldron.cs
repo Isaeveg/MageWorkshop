@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using TMPro;
 using UnityEngine;
+using UnityEngine.XR.Interaction.Toolkit.Interactables;
 
 namespace MageWorkshop
 {
@@ -19,18 +20,18 @@ namespace MageWorkshop
         public float emptySurfaceHeight = 0.37f;
         public float fullSurfaceHeight = 0.8f;
         public Color baseLiquidColor = new Color(0.35f, 0.3f, 0.25f);
-        [Tooltip("Średnica lustra cieczy w zależności od wysokości (dla kotła z brzuścem). Pusta = bez zmian.")]
+        [Tooltip("Średnica lustra cieczy w zależności od wysokości (dla kotła z brzuścem).")]
         public AnimationCurve surfaceDiameter = new AnimationCurve();
-        [Tooltip("Znacznik poziomu płynu wymaganego przez recepturę.")]
-        public Transform liquidMarker;
 
         [Header("Mieszanie")]
         [Tooltip("Środek dna kotła — oś, wokół której liczone są obroty.")]
         public Transform stirCenter;
         public float stirRadius = 0.23f;
         public float stirHeight = 0.5f;
-        [Tooltip("Blisko osi kąt jest niestabilny, więc ten obszar jest ignorowany.")]
-        public float stirDeadZone = 0.03f;
+        [Tooltip("Ile jednostek receptury przybywa na sekundę mieszania (1 = sekundy).")]
+        public float stirRate = 1f;
+        [Tooltip("Minimalna prędkość chochli (m/s), od której liczy się mieszanie.")]
+        public float minStirSpeed = 0.1f;
 
         [Header("Efekty")]
         public TMP_Text statusText;
@@ -44,145 +45,83 @@ namespace MageWorkshop
         BrewResult m_Result;
         bool m_Resolving;
         string m_LastMessage;
-
-        bool m_HasPreviousAngle;
-        float m_PreviousAngle;
-        float m_AccumulatedAngle;
-        float m_NextStirHapticTime;
-        float m_NextTextRefreshTime;
         float m_LiquidVolume;
+
+        Ladle m_Ladle;
+        Vector3 m_PreviousTip;
+        float m_NextStirHapticTime;
 
         void Start()
         {
-            if (stirCenter == null)
-                stirCenter = transform;
+            m_Ladle = FindFirstObjectByType<Ladle>();
+            m_PreviousTip = m_Ladle.tip.position;
             ResetBrew();
         }
 
         void Update()
         {
-            TrackStirring();
+            var tip = m_Ladle.tip.position;
+            var local = tip - stirCenter.position;
+            bool inCauldron = new Vector2(local.x, local.z).magnitude <= stirRadius && local.y >= -0.05f && local.y <= stirHeight;
+            bool moving = (tip - m_PreviousTip).magnitude > minStirSpeed * Time.deltaTime;
+            m_PreviousTip = tip;
 
-            if (m_HasPreviousAngle && Time.time >= m_NextTextRefreshTime)
+            if (!m_Ladle.IsHeld || !inCauldron || !moving || m_Resolving)
+                return;
+
+            Record(BrewActionKind.Stir, null, stirRate * Time.deltaTime);
+
+            if (Time.time >= m_NextStirHapticTime)
             {
-                RefreshVisuals();
-                m_NextTextRefreshTime = Time.time + 0.2f;
+                Haptics.Pulse(m_Ladle.Grab, 0.1f, 0.05f);
+                m_NextStirHapticTime = Time.time + 0.15f;
             }
         }
 
         void OnTriggerStay(Collider other)
         {
             var ingredient = other.GetComponentInParent<Ingredient>();
-            if (ingredient == null || ingredient.definition == null || ingredient.Grab.isSelected)
+            if (ingredient == null || ingredient.GetComponent<XRGrabInteractable>().isSelected)
                 return;
 
-            if (!ingredient.TryConsume() || m_Resolving)
-                return;
-
-            Record(BrewActionKind.Ingredient, ingredient.definition, 1f, false);
+            ingredient.GetComponent<ReturnHome>().SendHome();
+            if (!m_Resolving)
+                Record(BrewActionKind.Ingredient, ingredient.definition, 1f);
         }
 
         public void AddLiquid(IngredientDefinition liquid, float milliliters)
         {
-            if (m_Resolving || liquid == null || milliliters <= 0f)
+            if (m_Resolving)
                 return;
 
             m_LiquidVolume = Mathf.Min(capacity, m_LiquidVolume + milliliters);
-            Record(BrewActionKind.Liquid, liquid, milliliters, false);
+            Record(BrewActionKind.Liquid, liquid, milliliters);
         }
 
-        void AddStirRevolution(bool clockwise)
-        {
-            if (m_Resolving)
-                return;
-            Record(BrewActionKind.Stir, null, 1f, clockwise);
-        }
-
-        void Record(BrewActionKind kind, IngredientDefinition ingredient, float amount, bool clockwise)
+        void Record(BrewActionKind kind, IngredientDefinition ingredient, float amount)
         {
             var last = m_Log.Count > 0 ? m_Log[m_Log.Count - 1] : null;
-            if (last != null && last.CanMergeWith(kind, ingredient, clockwise))
+            if (last != null && last.kind == kind && last.ingredient == ingredient)
                 last.amount += amount;
             else
-                m_Log.Add(new BrewAction { kind = kind, ingredient = ingredient, amount = amount, clockwise = clockwise });
-
-            Evaluate();
-        }
-
-        void Evaluate()
-        {
-            if (recipe == null)
-            {
-                RefreshVisuals();
-                return;
-            }
+                m_Log.Add(new BrewAction { kind = kind, ingredient = ingredient, amount = amount });
 
             m_Result = recipe.Evaluate(m_Log);
             if (m_Result.status == BrewStatus.Failed)
-                StartCoroutine(Explode(m_Result.message));
+            {
+                PushNearbyObjects();
+                StartCoroutine(Finish($"<color=#b0281a>BUM! {m_Result.message}</color>", explosionEffect, 0.9f, resetDelay));
+            }
             else if (m_Result.status == BrewStatus.Success)
-                StartCoroutine(Succeed(m_Result.message));
+            {
+                StartCoroutine(Finish($"<color=#2e7d32>{m_Result.message}</color>", successEffect, 0.3f, resetDelay + 1f));
+            }
 
             RefreshVisuals();
         }
 
-        void TrackStirring()
+        void PushNearbyObjects()
         {
-            Ladle stirring = null;
-            Vector3 local = default;
-            foreach (var ladle in Ladle.Active)
-            {
-                if (!ladle.IsHeld)
-                    continue;
-                local = ladle.tip.position - stirCenter.position;
-                var horizontal = new Vector2(local.x, local.z).magnitude;
-                if (horizontal <= stirRadius && horizontal >= stirDeadZone && local.y >= -0.05f && local.y <= stirHeight)
-                {
-                    stirring = ladle;
-                    break;
-                }
-            }
-
-            if (stirring == null)
-            {
-                m_HasPreviousAngle = false;
-                m_AccumulatedAngle = 0f;
-                return;
-            }
-
-            float angle = Mathf.Atan2(local.x, local.z) * Mathf.Rad2Deg;
-            if (m_HasPreviousAngle)
-            {
-                float delta = Mathf.DeltaAngle(m_PreviousAngle, angle);
-                m_AccumulatedAngle += delta;
-
-                if (Mathf.Abs(delta) > 0.5f && Time.time >= m_NextStirHapticTime)
-                {
-                    stirring.Pulse(0.1f, 0.05f);
-                    m_NextStirHapticTime = Time.time + 0.15f;
-                }
-
-                if (Mathf.Abs(m_AccumulatedAngle) >= 360f)
-                {
-                    bool clockwise = m_AccumulatedAngle > 0f;
-                    m_AccumulatedAngle -= clockwise ? 360f : -360f;
-                    stirring.Pulse(0.5f, 0.1f);
-                    AddStirRevolution(clockwise);
-                }
-            }
-
-            m_PreviousAngle = angle;
-            m_HasPreviousAngle = true;
-        }
-
-        IEnumerator Explode(string message)
-        {
-            m_Resolving = true;
-            m_LastMessage = "<color=#b0281a>BUM! " + message + "</color>";
-
-            if (explosionEffect != null)
-                explosionEffect.Play();
-
             var center = stirCenter.position + Vector3.up * 0.4f;
             foreach (var hit in Physics.OverlapSphere(center, explosionRadius))
             {
@@ -190,48 +129,26 @@ namespace MageWorkshop
                 if (body != null && !body.isKinematic)
                     body.AddExplosionForce(explosionForce, center, explosionRadius, 0.5f, ForceMode.Impulse);
             }
-
-            Haptics.PulseAll(0.9f, 0.4f);
-            RefreshVisuals();
-
-            yield return new WaitForSeconds(resetDelay);
-            ResetBrew();
         }
 
-        IEnumerator Succeed(string message)
+        IEnumerator Finish(string message, ParticleSystem effect, float hapticStrength, float delay)
         {
             m_Resolving = true;
-            m_LastMessage = "<color=#2e7d32>" + message + "</color>";
+            m_LastMessage = message;
+            effect.Play();
+            Haptics.PulseAll(hapticStrength, 0.3f);
 
-            if (successEffect != null)
-                successEffect.Play();
-            Haptics.PulseAll(0.3f, 0.2f);
-            RefreshVisuals();
-
-            yield return new WaitForSeconds(resetDelay + 1f);
+            yield return new WaitForSeconds(delay);
             ResetBrew();
         }
 
-        public void ResetBrew()
+        void ResetBrew()
         {
-            StopAllCoroutines();
             m_Log.Clear();
             m_LiquidVolume = 0f;
-            m_AccumulatedAngle = 0f;
-            m_HasPreviousAngle = false;
             m_Resolving = false;
             m_LastMessage = null;
-            m_Result = recipe != null ? recipe.Evaluate(m_Log) : default;
-
-            if (liquidMarker != null && recipe != null)
-            {
-                var markerPosition = liquidMarker.localPosition;
-                markerPosition.y = SurfaceHeight(recipe.TotalLiquid);
-                liquidMarker.localPosition = markerPosition;
-                if (surfaceDiameter.length > 0)
-                    liquidMarker.localScale = Vector3.one * (surfaceDiameter.Evaluate(markerPosition.y) / 0.5f);
-            }
-
+            m_Result = recipe.Evaluate(m_Log);
             RefreshVisuals();
         }
 
@@ -242,24 +159,14 @@ namespace MageWorkshop
 
         void RefreshVisuals()
         {
-            if (liquidSurface != null)
-            {
-                liquidSurface.gameObject.SetActive(m_Log.Count > 0);
-                var position = liquidSurface.localPosition;
-                position.y = SurfaceHeight(m_LiquidVolume);
-                liquidSurface.localPosition = position;
-                if (surfaceDiameter.length > 0)
-                {
-                    float diameter = surfaceDiameter.Evaluate(position.y);
-                    liquidSurface.localScale = new Vector3(diameter, 1f, diameter);
-                }
-            }
+            float height = SurfaceHeight(m_LiquidVolume);
+            float diameter = surfaceDiameter.Evaluate(height);
+            liquidSurface.gameObject.SetActive(m_Log.Count > 0);
+            liquidSurface.localPosition = new Vector3(0f, height, 0f);
+            liquidSurface.localScale = new Vector3(diameter, 1f, diameter);
 
-            if (liquidRenderer != null)
-                liquidRenderer.material.color = m_Result.status == BrewStatus.Success && recipe != null ? recipe.resultColor : MixColor();
-
-            if (statusText != null)
-                statusText.text = BuildStatusText();
+            liquidRenderer.material.color = m_Result.status == BrewStatus.Success ? recipe.resultColor : MixColor();
+            statusText.text = BuildStatusText();
         }
 
         Color MixColor()
@@ -279,9 +186,6 @@ namespace MageWorkshop
 
         string BuildStatusText()
         {
-            if (recipe == null)
-                return "Brak receptury";
-
             var text = new StringBuilder();
             text.AppendLine($"<b>Zamówienie: {recipe.displayName}</b>");
             for (int i = 0; i < recipe.steps.Count; i++)
@@ -295,14 +199,10 @@ namespace MageWorkshop
 
                 if (current && i < m_Log.Count)
                     text.Append($"  <color=#b36b00>[{m_Log[i].amount:0}/{step.amount:0}]</color>");
-                else if (current && step.kind == BrewActionKind.Stir && Mathf.Abs(m_AccumulatedAngle) > 30f)
-                    text.Append($"  <color=#b36b00>[{Mathf.Abs(m_AccumulatedAngle) / 3.6f:0}%]</color>");
                 text.AppendLine();
             }
 
-            if (!string.IsNullOrEmpty(m_LastMessage))
-                text.AppendLine().Append(m_LastMessage);
-
+            text.AppendLine().Append(m_LastMessage);
             return text.ToString();
         }
     }

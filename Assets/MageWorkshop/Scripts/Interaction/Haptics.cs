@@ -8,9 +8,6 @@ namespace MageWorkshop
     {
         public static void Pulse(XRBaseInteractable interactable, float amplitude, float duration)
         {
-            if (interactable == null)
-                return;
-
             foreach (var interactor in interactable.interactorsSelecting)
             {
                 if (interactor is XRBaseInputInteractor inputInteractor)

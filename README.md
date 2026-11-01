@@ -21,7 +21,7 @@ Wszystkie pliki projektu są w `Assets/MageWorkshop`: `Scenes` — scena, `Scrip
 
 | Plik | Opis |
 | --- | --- |
-| `Scripts/Brewing/Cauldron.cs` | Kocioł: rejestrowanie składników, płynów i obrotów chochli, poziom i kolor cieczy, ocena receptury, wybuch |
+| `Scripts/Brewing/Cauldron.cs` | Kocioł: rejestrowanie składników, płynów i mieszania chochlą, poziom i kolor cieczy, ocena receptury, wybuch |
 | `Scripts/Brewing/Recipe.cs` | Receptura (ScriptableObject) i jej sprawdzanie |
 | `Scripts/Brewing/BrewAction.cs` | Pojedyncza czynność zarejestrowana przez kocioł |
 | `Scripts/Brewing/IngredientDefinition.cs` | Rodzaj składnika (stały lub płynny) |

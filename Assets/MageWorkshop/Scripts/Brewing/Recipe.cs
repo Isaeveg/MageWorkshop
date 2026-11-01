@@ -24,11 +24,12 @@ namespace MageWorkshop
         public BrewActionKind kind;
         [Tooltip("Puste dla kroku mieszania.")]
         public IngredientDefinition ingredient;
-        [Tooltip("Sztuki, mililitry albo liczba obrotów.")]
+        [Tooltip("Sztuki, mililitry albo sekundy mieszania.")]
         public float amount = 1f;
-        [Tooltip("Dopuszczalne odchylenie ilości (dla płynów).")]
+        [Tooltip("Dopuszczalne odchylenie ilości (dla płynów i mieszania).")]
         public float tolerance;
-        public bool clockwise = true;
+
+        public string Name => ingredient != null ? ingredient.displayName : "mieszanie";
 
         public string Describe()
         {
@@ -37,37 +38,19 @@ namespace MageWorkshop
                 case BrewActionKind.Ingredient:
                     return $"{amount:0}× {Name}";
                 case BrewActionKind.Liquid:
-                    return $"{Name} do znacznika ({amount:0} ml)";
+                    return $"{Name} ({amount:0} ml)";
                 default:
-                    return $"{amount:0} obr. chochlą {(clockwise ? "zgodnie z ruchem wskazówek zegara" : "przeciwnie do ruchu wskazówek zegara")}";
+                    return $"Mieszaj chochlą przez {amount:0} s";
             }
         }
-
-        string Name => ingredient != null ? ingredient.displayName : "?";
     }
 
     [CreateAssetMenu(menuName = "Mage Workshop/Recipe", fileName = "Recipe")]
     public class Recipe : ScriptableObject
     {
-        const float k_Epsilon = 0.001f;
-
         public string displayName = "Mikstura";
         public Color resultColor = Color.red;
         public List<RecipeStep> steps = new List<RecipeStep>();
-
-        public float TotalLiquid
-        {
-            get
-            {
-                float total = 0f;
-                foreach (var step in steps)
-                {
-                    if (step.kind == BrewActionKind.Liquid)
-                        total += step.amount;
-                }
-                return total;
-            }
-        }
 
         public BrewResult Evaluate(IReadOnlyList<BrewAction> log)
         {
@@ -78,22 +61,18 @@ namespace MageWorkshop
 
                 var action = log[i];
                 var step = steps[i];
-                bool isLast = i == log.Count - 1;
 
                 if (action.kind != step.kind || action.ingredient != step.ingredient)
                     return Failed(i, $"Zły krok! Oczekiwano: {step.Describe()}");
 
-                if (step.kind == BrewActionKind.Stir && action.clockwise != step.clockwise)
-                    return Failed(i, "Zły kierunek mieszania!");
+                if (action.amount > step.amount + step.tolerance)
+                    return Failed(i, $"Za dużo: {step.Name}!");
 
-                if (action.amount > step.amount + step.tolerance + k_Epsilon)
-                    return Failed(i, $"Za dużo: {StepName(step)}!");
-
-                if (action.amount < step.amount - step.tolerance - k_Epsilon)
+                if (action.amount < step.amount - step.tolerance)
                 {
-                    if (isLast)
+                    if (i == log.Count - 1)
                         return new BrewResult { status = BrewStatus.InProgress, completedSteps = i };
-                    return Failed(i, $"Za mało: {StepName(step)}!");
+                    return Failed(i, $"Za mało: {step.Name}!");
                 }
             }
 
@@ -106,11 +85,6 @@ namespace MageWorkshop
         static BrewResult Failed(int completed, string message)
         {
             return new BrewResult { status = BrewStatus.Failed, completedSteps = completed, message = message };
-        }
-
-        static string StepName(RecipeStep step)
-        {
-            return step.kind == BrewActionKind.Stir ? "obrotów chochlą" : step.ingredient.displayName;
         }
     }
 }

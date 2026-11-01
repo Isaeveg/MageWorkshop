@@ -42,30 +42,18 @@ namespace MageWorkshop
 
         bool IsOutOfReach()
         {
-            if (transform.position.y < floorHeight)
-                return true;
-
-            var head = Camera.main;
-            if (head == null)
-                return false;
-
-            var offset = transform.position - head.transform.position;
+            var offset = transform.position - Camera.main.transform.position;
             offset.y = 0f;
-            return offset.magnitude > reachRadius;
+            return transform.position.y < floorHeight || offset.magnitude > reachRadius;
         }
 
         public void SendHome()
         {
             m_OutOfReachTime = 0f;
-            if (m_Body != null)
+            if (!m_Body.isKinematic)
             {
-                if (!m_Body.isKinematic)
-                {
-                    m_Body.linearVelocity = Vector3.zero;
-                    m_Body.angularVelocity = Vector3.zero;
-                }
-                m_Body.position = m_HomePosition;
-                m_Body.rotation = m_HomeRotation;
+                m_Body.linearVelocity = Vector3.zero;
+                m_Body.angularVelocity = Vector3.zero;
             }
             transform.SetPositionAndRotation(m_HomePosition, m_HomeRotation);
         }

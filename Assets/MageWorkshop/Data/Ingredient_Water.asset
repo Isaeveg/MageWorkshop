@@ -14,4 +14,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: "Woda \u017Ar\xF3dlana"
   color: {r: 0.35, g: 0.65, b: 1, a: 1}
-  isLiquid: 1

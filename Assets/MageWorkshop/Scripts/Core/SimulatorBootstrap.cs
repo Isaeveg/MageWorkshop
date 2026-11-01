@@ -10,36 +10,22 @@ namespace MageWorkshop
         public GameObject simulatorPrefab;
         [Tooltip("Ile sekund czekać na wykrycie gogli przed włączeniem symulatora.")]
         public float headsetWaitTime = 1.5f;
-        [Tooltip("Włącz symulator nawet przy podłączonych goglach.")]
-        public bool forceSimulator;
-        [Tooltip("Pozwól na symulator także w buildzie (domyślnie tylko w edytorze).")]
-        public bool allowInBuild;
 
         IEnumerator Start()
         {
-            if (simulatorPrefab == null || (!Application.isEditor && !allowInBuild))
+            if (!Application.isEditor)
                 yield break;
 
-            if (!forceSimulator)
+            var devices = new List<InputDevice>();
+            for (float waited = 0f; waited < headsetWaitTime; waited += Time.unscaledDeltaTime)
             {
-                var devices = new List<InputDevice>();
-                float waited = 0f;
-                while (waited < headsetWaitTime)
-                {
-                    InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, devices);
-                    if (devices.Count > 0)
-                    {
-                        Debug.Log($"[MageWorkshop] Wykryto gogle: {devices[0].name}. Symulator wyłączony.");
-                        yield break;
-                    }
-                    waited += Time.unscaledDeltaTime;
-                    yield return null;
-                }
+                InputDevices.GetDevicesWithCharacteristics(InputDeviceCharacteristics.HeadMounted, devices);
+                if (devices.Count > 0)
+                    yield break;
+                yield return null;
             }
 
-            Debug.Log("[MageWorkshop] Nie wykryto gogli — uruchamiam XR Interaction Simulator.");
-            var simulator = Instantiate(simulatorPrefab);
-            simulator.name = simulatorPrefab.name;
+            Instantiate(simulatorPrefab);
         }
     }
 }

@@ -14,4 +14,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   displayName: "Ut\u0142uczony korze\u0144 mandragory"
   color: {r: 0.55, g: 0.45, b: 0.2, a: 1}
-  isLiquid: 0

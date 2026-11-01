@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Attachment;
 using UnityEngine.XR.Interaction.Toolkit.Interactors;
 
@@ -12,7 +11,6 @@ namespace MageWorkshop
         public float speed = 0.6f;
         [Tooltip("Maksymalna odległość przedmiotu od dłoni (m).")]
         public float maxDistance = 1f;
-        [Range(0f, 1f)] public float deadZone = 0.2f;
 
         NearFarInteractor m_Interactor;
         InteractionAttachController m_AttachController;
@@ -20,37 +18,26 @@ namespace MageWorkshop
         void Awake()
         {
             m_Interactor = GetComponent<NearFarInteractor>();
-            m_AttachController = m_Interactor.interactionAttachController as InteractionAttachController;
-        }
-
-        void OnEnable()
-        {
-            m_Interactor.selectExited.AddListener(OnSelectExited);
-        }
-
-        void OnDisable()
-        {
-            m_Interactor.selectExited.RemoveListener(OnSelectExited);
+            m_AttachController = (InteractionAttachController)m_Interactor.interactionAttachController;
         }
 
         void Update()
         {
-            if (m_AttachController == null || !m_Interactor.hasSelection || m_AttachController.hasOffset)
-                return;
-
-            if (!m_AttachController.manipulationInput.TryReadValue(out var input) || Mathf.Abs(input.y) < deadZone)
+            if (m_AttachController.hasOffset)
                 return;
 
             var anchor = m_Interactor.attachTransform;
-            var position = anchor.localPosition;
-            position.z = Mathf.Clamp(position.z + input.y * speed * Time.deltaTime, 0f, maxDistance);
-            anchor.localPosition = position;
-        }
+            if (!m_Interactor.hasSelection)
+            {
+                anchor.localPosition = Vector3.zero;
+                return;
+            }
 
-        void OnSelectExited(SelectExitEventArgs args)
-        {
-            if (m_AttachController != null && !m_AttachController.hasOffset && !m_Interactor.hasSelection)
-                m_Interactor.attachTransform.localPosition = Vector3.zero;
+            if (m_AttachController.manipulationInput.TryReadValue(out var input))
+            {
+                float distance = Mathf.Clamp(anchor.localPosition.z + input.y * speed * Time.deltaTime, 0f, maxDistance);
+                anchor.localPosition = new Vector3(0f, 0f, distance);
+            }
         }
     }
 }
