@@ -28,6 +28,9 @@ namespace MageWorkshop
         void LateUpdate()
         {
             var head = m_Origin.Camera.transform.position;
+            if (!float.IsFinite(head.x + head.y + head.z))
+                return;
+
             float top = head.y;
             float bottom = Mathf.Min(transform.position.y + feetClearance, top - radius * 2f);
             var center = new Vector3(head.x, (top + bottom) / 2f, head.z);
@@ -51,7 +54,8 @@ namespace MageWorkshop
                 }
             }
 
-            transform.position += push;
+            if (float.IsFinite(push.x + push.y + push.z))
+                transform.position += push;
         }
     }
 }
